@@ -1,1 +1,1 @@
-# 2-Axis-Gimbal-Controller-BNO055
+# 2-Axis-Gimbal-BNO055
