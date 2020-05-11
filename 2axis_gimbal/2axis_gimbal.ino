@@ -49,6 +49,8 @@ int battTotal = 0;
 int battValueAvg = 0;
 bool motorDrive = 0;
 unsigned long currentTime;
+unsigned long lastTime=0;
+int loopTime;
 
 
 void setup() {
@@ -109,6 +111,11 @@ delay(500);
 */
 
 currentTime=millis();
+loopTime=currentTime-lastTime;
+lastTime=currentTime;
+
+
+
 /*
 if(currentTime<10000){
   motorDrive=0;
@@ -261,7 +268,7 @@ maestro.setTarget(1,microSecZ);
   Serial.print(" / ");
   Serial.print(Period);
   Serial.print("\tTime: ");
-  Serial.println(currentTime);
+  Serial.println(loopTime);
  // Serial.print("\troll ");
   //Serial.println(roll);
   //Serial.print(" / ");
