@@ -51,6 +51,8 @@ bool motorDrive = 0;
 unsigned long currentTime;
 unsigned long lastTime=0;
 int loopTime;
+float dh, diff, diffX;
+float lastDh=0;
 
 
 void setup() {
@@ -110,6 +112,7 @@ delay(500);
 // end of serial input
 */
 
+//Loop time
 currentTime=millis();
 loopTime=currentTime-lastTime;
 lastTime=currentTime;
@@ -153,11 +156,32 @@ if (radio.available()) {
   }
     
 //parse the array that was recieved
-  float dh=desired[0]; //desired heading
+  dh=desired[0]; //desired heading
   float dt=desired[1]; //deisred tilt
   rst=desired[2]; //Reset signal
   motorDrive=desired[3]; //drive yes/no
-  
+
+//Calculate dh difference for manual operation
+diff=(dh-lastDh)*100;
+diffX=diffX+diff;
+lastDh=dh;
+
+//decay differnce over time
+
+if(diffX>0){
+  diffX=diffX-loopTime;
+    if(diffX<0){
+      diffX=0;
+    }
+}
+
+if(diffX<0){
+  diffX=diffX+loopTime;
+   if(diffX>0){
+    diffX=0;
+   }
+}
+
   
 // Get new sensor data, old method
 sensors_event_t event;
@@ -239,16 +263,43 @@ myPID.Compute();
 int Period=map(Output,-1023,1023,8000,4000);
 
 //Pan Motor Driving
-if (uhe<-.4 && motorDrive==1 || uhe>.4 && motorDrive==1)
+if (motorDrive==1){
+  if (uhe<-.4 || uhe>.4)
   {
   maestro.setTarget(0,Period);
   myPID.SetOutputLimits(-1023,1023);
   }
-  else if (uhe>-.4 && uhe<.4 || motorDrive==0)
+  else if (uhe>-.4 && uhe<.4)
   {
   maestro.setTarget(0,6000);
   myPID.SetOutputLimits(-1,1);
   }
+}
+
+if (motorDrive==0){
+  if(diffX==0){
+    maestro.setTarget(0,6000);
+  }
+  if(diffX>0 && diffX<=100){
+    maestro.setTarget(0,6100);
+  }
+  if(diffX>100 && diffX<=500){
+    maestro.setTarget(0,6500);
+  }
+    if(diffX>500){
+    maestro.setTarget(0,7000);
+  }
+    if(diffX<0 && diffX>=-100){
+    maestro.setTarget(0,5900);
+  }
+  if(diffX<-100 && diffX>=-500){
+    maestro.setTarget(0,5500);
+  }
+    if(diffX<-500){
+    maestro.setTarget(0,5000);
+  }
+}
+
 
 
 //Tilt Motor Driving
@@ -264,10 +315,12 @@ maestro.setTarget(1,microSecZ);
   Serial.print("\tPan: ");
   Serial.print(ch);
   Serial.print(" / ");
-  Serial.print(uhe);
+  Serial.print(dh);
   Serial.print(" / ");
   Serial.print(Period);
-  Serial.print("\tTime: ");
+  Serial.print("\tDiff: ");
+  Serial.print(diffX);
+  Serial.print(" / ");
   Serial.println(loopTime);
  // Serial.print("\troll ");
   //Serial.println(roll);
