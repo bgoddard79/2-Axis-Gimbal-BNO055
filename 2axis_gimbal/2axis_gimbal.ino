@@ -24,7 +24,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 //PID Setup
 double Setpoint=0, uhe, Output;
-PID myPID(&uhe, &Output, &Setpoint,60,30,.5,P_ON_E, DIRECT);
+PID myPID(&uhe, &Output, &Setpoint,40,20,.5,P_ON_E, DIRECT);
 
 //Radio Setup
 RF24 radio(7, 8); // CE, CSN
