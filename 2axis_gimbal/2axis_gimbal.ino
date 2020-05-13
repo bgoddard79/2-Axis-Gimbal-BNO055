@@ -53,6 +53,7 @@ unsigned long lastTime=0;
 int loopTime;
 float dh, diff, diffX;
 float lastDh=0;
+int periodM=6000;
 
 
 void setup() {
@@ -162,7 +163,19 @@ if (radio.available()) {
   motorDrive=desired[3]; //drive yes/no
 
 //Calculate dh difference for manual operation
-diff=(dh-lastDh)*100;
+diff=dh-lastDh;
+
+if(diff<=180 && diff>=-180){
+  diff=diff;
+}
+else if(diff>180){
+  diff=diff-360;
+}
+else if(diff<180){
+  diff=diff+360;
+}
+
+diff=diff*100;                                 // use this line to adjust sensitivity of movement
 diffX=diffX+diff;
 lastDh=dh;
 
@@ -263,7 +276,7 @@ myPID.Compute();
 int Period=map(Output,-1023,1023,8000,4000);
 
 //Pan Motor Driving
-if (motorDrive==1){
+if (motorDrive==1){                              // Auto
   if (uhe<-.4 || uhe>.4)
   {
   maestro.setTarget(0,Period);
@@ -276,28 +289,9 @@ if (motorDrive==1){
   }
 }
 
-if (motorDrive==0){
-  if(diffX==0){
-    maestro.setTarget(0,6000);
-  }
-  if(diffX>0 && diffX<=100){
-    maestro.setTarget(0,6100);
-  }
-  if(diffX>100 && diffX<=500){
-    maestro.setTarget(0,6500);
-  }
-    if(diffX>500){
-    maestro.setTarget(0,7000);
-  }
-    if(diffX<0 && diffX>=-100){
-    maestro.setTarget(0,5900);
-  }
-  if(diffX<-100 && diffX>=-500){
-    maestro.setTarget(0,5500);
-  }
-    if(diffX<-500){
-    maestro.setTarget(0,5000);
-  }
+if (motorDrive==0){                           // Manual
+periodM=6000+diffX;
+maestro.setTarget(0,periodM);
 }
 
 
