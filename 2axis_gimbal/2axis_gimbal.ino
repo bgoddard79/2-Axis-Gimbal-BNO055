@@ -165,6 +165,10 @@ if (radio.available()) {
 //Calculate dh difference for manual operation
 diff=dh-lastDh;
 
+if(diff>10){
+  diff=0;
+}
+
 if(diff<=180 && diff>=-180){
   diff=diff;
 }
