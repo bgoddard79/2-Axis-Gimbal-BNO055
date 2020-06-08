@@ -24,7 +24,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 //PID Setup
 double Setpoint=0, uhe, Output;
-PID myPID(&uhe, &Output, &Setpoint,60,30,.5,P_ON_E, DIRECT);
+PID myPID(&uhe, &Output, &Setpoint,40,20,.5,P_ON_E, DIRECT);
 
 //Radio Setup
 RF24 radio(7, 8); // CE, CSN
@@ -49,6 +49,11 @@ int battTotal = 0;
 int battValueAvg = 0;
 bool motorDrive = 0;
 unsigned long currentTime;
+unsigned long lastTime=0;
+int loopTime;
+float dh, diff, diffX;
+float lastDh=0;
+int periodM=6000;
 
 
 void setup() {
@@ -108,7 +113,13 @@ delay(500);
 // end of serial input
 */
 
+//Loop time
 currentTime=millis();
+loopTime=currentTime-lastTime;
+lastTime=currentTime;
+
+
+
 /*
 if(currentTime<10000){
   motorDrive=0;
@@ -146,11 +157,48 @@ if (radio.available()) {
   }
     
 //parse the array that was recieved
-  float dh=desired[0]; //desired heading
+  dh=desired[0]; //desired heading
   float dt=desired[1]; //deisred tilt
   rst=desired[2]; //Reset signal
   motorDrive=desired[3]; //drive yes/no
-  
+
+//Calculate dh difference for manual operation
+diff=dh-lastDh;
+
+if(diff>10){
+  diff=0;
+}
+
+if(diff<=180 && diff>=-180){
+  diff=diff;
+}
+else if(diff>180){
+  diff=diff-360;
+}
+else if(diff<180){
+  diff=diff+360;
+}
+
+diff=diff*100;                                 // use this line to adjust sensitivity of movement
+diffX=diffX+diff;
+lastDh=dh;
+
+//decay differnce over time
+
+if(diffX>0){
+  diffX=diffX-loopTime;
+    if(diffX<0){
+      diffX=0;
+    }
+}
+
+if(diffX<0){
+  diffX=diffX+loopTime;
+   if(diffX>0){
+    diffX=0;
+   }
+}
+
   
 // Get new sensor data, old method
 sensors_event_t event;
@@ -232,16 +280,24 @@ myPID.Compute();
 int Period=map(Output,-1023,1023,8000,4000);
 
 //Pan Motor Driving
-if (uhe<-.4 && motorDrive==1 || uhe>.4 && motorDrive==1)
+if (motorDrive==1){                              // Auto
+  if (uhe<-.4 || uhe>.4)
   {
   maestro.setTarget(0,Period);
   myPID.SetOutputLimits(-1023,1023);
   }
-  else if (uhe>-.4 && uhe<.4 || motorDrive==0)
+  else if (uhe>-.4 && uhe<.4)
   {
   maestro.setTarget(0,6000);
   myPID.SetOutputLimits(-1,1);
   }
+}
+
+if (motorDrive==0){                           // Manual
+periodM=6000+diffX;
+maestro.setTarget(0,periodM);
+}
+
 
 
 //Tilt Motor Driving
@@ -257,11 +313,13 @@ maestro.setTarget(1,microSecZ);
   Serial.print("\tPan: ");
   Serial.print(ch);
   Serial.print(" / ");
-  Serial.print(uhe);
+  Serial.print(dh);
   Serial.print(" / ");
   Serial.print(Period);
-  Serial.print("\tTime: ");
-  Serial.println(currentTime);
+  Serial.print("\tDiff: ");
+  Serial.print(diffX);
+  Serial.print(" / ");
+  Serial.println(loopTime);
  // Serial.print("\troll ");
   //Serial.println(roll);
   //Serial.print(" / ");
