@@ -7,6 +7,60 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <PololuMaestro.h>
+#include <EEPROM.h>
+
+
+//IMU Setup
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
+
+void initializeSensor(void)
+{
+    if (!bno.begin())
+    {
+        /* There was a problem detecting the BNO055 ... check your connections */
+        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+        while (1);
+    }
+
+    int eeAddress = 0;
+    long bnoID;
+    bool foundCalib = false;
+
+    EEPROM.get(eeAddress, bnoID);
+
+    adafruit_bno055_offsets_t calibrationData;
+    sensor_t sensor;
+
+    /*
+    *  Look for the sensor's unique ID at the beginning oF EEPROM.
+    *  This isn't foolproof, but it's better than nothing.
+    */
+    bno.getSensor(&sensor);
+    if (bnoID != sensor.sensor_id)
+    {
+        Serial.println("\nNo Calibration Data for this sensor exists in EEPROM");
+        delay(500);
+    }
+    else
+    {
+        Serial.println("\nFound Calibration for this sensor in EEPROM.");
+        eeAddress += sizeof(long);
+        EEPROM.get(eeAddress, calibrationData);
+
+       // displaySensorOffsets(calibrationData);
+
+        Serial.println("\n\nRestoring Calibration data to the BNO055...");
+        bno.setSensorOffsets(calibrationData);
+
+        Serial.println("\n\nCalibration data loaded into BNO055");
+        foundCalib = true;
+    }
+
+    delay(1000);
+  bno.setExtCrystalUse(true);
+  
+}
 
 
 //Servo Controller Setup
@@ -19,8 +73,7 @@
 
 MicroMaestro maestro(maestroSerial);
 
-//IMU Setup
-Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
 
 //PID Setup
 double Setpoint=0, uhe, Output;
@@ -74,13 +127,8 @@ myPID.SetMode(AUTOMATIC);
 myPID.SetOutputLimits(-1023,1023);
 
 //BNO Initalize
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while(1);
-  }
-  bno.setExtCrystalUse(true);
+
+initializeSensor();
 
 //Radio Initalize
 radio.begin();
@@ -233,17 +281,16 @@ if(ch<0){
 }
 */
 
-// Sensor invert short circut
+// Sensor Reset
 
 if (rst == 1){
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
-    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while(1);
-  }
-  bno.setExtCrystalUse(true);
-  
+  initializeSensor();
+
+}
+
+if (tilt>5 || tilt<-5 || roll>5 || roll<-5){
+  maestro.setTarget(0,6000);
+  initializeSensor();  
 }
 
 
