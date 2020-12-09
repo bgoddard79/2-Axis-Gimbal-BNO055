@@ -57,6 +57,7 @@ const float tiltMed = 1;
 const float tiltFast = 2.5;
 float panInc=panMed;
 float tiltInc=tiltMed;
+float ch;
 
 
 // Callback function to be called when the button is pressed.
@@ -96,6 +97,7 @@ void panShort(){
 void panLong(){
   if(data == 0){
     if(drive == 0){
+      desiredHeading= ch; 
       drive=1;
   }
     else if(drive == 1){
@@ -230,7 +232,7 @@ radio.read(&payload, sizeof(payload));
 
 //parse the array that was recieved
 float battVoltageFlt = payload[0];
-float ch = payload[1];
+ch = payload[1];
 float roll = payload[2];
 float tilt = payload[3];
 int system = payload[4];
