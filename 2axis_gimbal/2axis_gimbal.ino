@@ -8,10 +8,45 @@
 #include <RF24.h>
 #include <PololuMaestro.h>
 #include <EEPROM.h>
-
+#define BNO055_SAMPLERATE_DELAY_MS (100)
 
 //IMU Setup
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
+
+//Constants and Variables
+float ch;
+float desired[4]; //array that radio recieves
+//float rollCorrect = -1.3;
+//float tiltCorrect = .24;
+//int rollCenter = 1465;
+int tiltCenter = 1725;
+float degPerUs = 10.33;
+const int battReadings = 20;
+int battValue[battReadings];
+int battIndex = 0;
+int battTotal = 0;
+int battValueAvg = 0;
+bool motorDrive = 0;
+unsigned long currentTime;
+unsigned long lastTime=0;
+int loopTime;
+float dh, diff, diffX;
+float lastDh=0;
+int periodM=6000;
+float battVoltage;
+float tilt;
+float roll;
+bool isCalibrated = 1;
+uint8_t system2, gyro, accel, mag;
+
+
+//Radio Setup
+RF24 radio(7, 8); // CE, CSN
+//Set this to the serial number written on controler board. Temp Uncomment the one you are using
+//const byte addresses[][6] = {"A0001","B0001"}; //Orange
+//const byte addresses[][6] = {"A0002","B0002"}; //Green
+const byte addresses[][6] = {"A0003","B0003"}; //Black
+
 
 
 void initializeSensor(void)
@@ -58,7 +93,116 @@ void initializeSensor(void)
     }
 
     delay(1000);
+
+    /* Display some basic information on this sensor */
+//    displaySensorDetails();
+
+    /* Optional: Display current status */
+//    displaySensorStatus();
+
+    
   bno.setExtCrystalUse(true);
+
+    sensors_event_t event;
+    bno.getEvent(&event);
+    /* always recal the mag as It goes out of calibration very often */
+    if (foundCalib){
+        Serial.println("Move sensor slightly to calibrate magnetometers");
+        while (!bno.isFullyCalibrated())
+        {
+            bno.getEvent(&event);
+            delay(BNO055_SAMPLERATE_DELAY_MS);
+        }
+    }
+    else
+    {
+        Serial.println("Please Calibrate Sensor: ");
+        while (!bno.isFullyCalibrated())
+        {
+            bno.getEvent(&event);
+
+            Serial.print("X: ");
+            Serial.print(event.orientation.x, 4);
+            Serial.print("\tY: ");
+            Serial.print(event.orientation.y, 4);
+            Serial.print("\tZ: ");
+            Serial.print(event.orientation.z, 4);
+            Serial.print("\tCal: ");
+            Serial.println(isCalibrated); 
+
+            /* Optional: Display calibration status */
+//            displayCalStatus();
+
+            /* New line for the next sample */
+//            Serial.println("");
+
+//**************************** Send info back while calibrating******************
+
+isCalibrated=0;
+
+ // uint8_t system2, gyro, accel, mag;
+  system2 = gyro = accel = mag = 0;
+  bno.getCalibration(&system2, &gyro, &accel, &mag);
+
+
+sendIt();
+
+
+            /* Wait the specified delay before requesting new data */
+            delay(BNO055_SAMPLERATE_DELAY_MS);
+            
+         
+        }
+    }
+
+    Serial.println("\nFully calibrated!");
+    Serial.println("--------------------------------");
+    Serial.println("Calibration Results: ");
+    adafruit_bno055_offsets_t newCalib;
+    bno.getSensorOffsets(newCalib);
+//    displaySensorOffsets(newCalib);
+
+    Serial.println("\n\nStoring calibration data to EEPROM...");
+
+    eeAddress = 0;
+    bno.getSensor(&sensor);
+    bnoID = sensor.sensor_id;
+
+    EEPROM.put(eeAddress, bnoID);
+
+    eeAddress += sizeof(long);
+    EEPROM.put(eeAddress, newCalib);
+    Serial.println("Data stored to EEPROM.");
+
+    Serial.println("\n--------------------------------\n");
+    isCalibrated=1;
+    delay(500);
+  
+}
+
+void sendIt(void){
+
+// Convert values to ints for smaller sending, need to stay under 32 bytes
+int  battVoltageX100 = battVoltage * 100;
+int chX10 = ch * 10;
+int tiltX10 = tilt * 10;
+int rollX10 = roll * 10;
+
+
+//Put data into an array for sending back to controller
+int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated};
+
+/*
+// Print contents of array for debug
+for (int i = 0; i < 9; i++) Serial.print(payload[i]);
+Serial.println();
+*/
+
+
+//Send info back to controller
+delay(5);
+radio.stopListening();
+radio.write(&payload, sizeof(payload));
   
 }
 
@@ -79,39 +223,9 @@ MicroMaestro maestro(maestroSerial);
 double Setpoint=0, uhe, Output;
 PID myPID(&uhe, &Output, &Setpoint,40,20,.5,P_ON_E, DIRECT);
 
-//Radio Setup
-RF24 radio(7, 8); // CE, CSN
-//Set this to the serial number written on controler board. Temp Uncomment the one you are using
-//const byte addresses[][6] = {"A0001","B0001"}; //Orange
-//const byte addresses[][6] = {"A0002","B0002"}; //Green
-const byte addresses[][6] = {"A0003","B0003"}; //Black
+
   
-
-//Constants and Variables
-float ch;
-float desired[4]; //array that radio recieves
-float rollCorrect = -1.3;
-float tiltCorrect = .24;
-//int rollCenter = 1465;
-int tiltCenter = 1725;
-float degPerUs = 10.33;
-const int battReadings = 20;
-int battValue[battReadings];
-int battIndex = 0;
-int battTotal = 0;
-int battValueAvg = 0;
-bool motorDrive = 0;
-unsigned long currentTime;
-unsigned long lastTime=0;
-int loopTime;
-float dh, diff, diffX;
-float lastDh=0;
-int periodM=6000;
-
-
 void setup() {
-
-
 
 Serial.begin(9600);
 Serial.println("Gimbal Startup");
@@ -126,13 +240,11 @@ myPID.SetSampleTime(100);
 myPID.SetMode(AUTOMATIC);
 myPID.SetOutputLimits(-1023,1023);
 
-//BNO Initalize
 
-initializeSensor();
 
 //Radio Initalize
 radio.begin();
-radio.setChannel(109);
+radio.setChannel(109); //0-124 are avalible
 //radio.setDataRate(RF24_250KBPS);
 radio.setPALevel(RF24_PA_LOW);
 radio.openWritingPipe(addresses[0]);
@@ -143,23 +255,13 @@ radio.openReadingPipe(1, addresses[1]);
     battValue[thisReading] = 0;
   }
   
+//BNO Initalize
+
+initializeSensor();
 }
 
 void loop() {
-/*
-// Read input from serial monitor, 1 turns recording on, 0 turns it off
-if (Serial.available()){
-incomming = Serial.read();
-if (incomming.equals("1")){
-  motorDrive = 1;
-}
-if (incomming.equals("0")){
-  motorDrive = 0;
-}
-delay(500);
-}
-// end of serial input
-*/
+
 
 //Loop time
 currentTime=millis();
@@ -167,23 +269,14 @@ loopTime=currentTime-lastTime;
 lastTime=currentTime;
 
 
+int rst=0;  // Change the reset signal back to 0
 
-/*
-if(currentTime<10000){
-  motorDrive=0;
-}
-else{
-  motorDrive=1;
-}
- */ 
-int rst=0;
 //Get Sensor Calibration Status
 /* Get the four calibration values (0..3) */
 /* Any sensor data reporting 0 should be ignored, */
 /* 3 means 'fully calibrated" */
-uint8_t system, gyro, accel, mag;
-system = gyro = accel = mag = 0;
-bno.getCalibration(&system, &gyro, &accel, &mag);
+system2 = gyro = accel = mag = 0;
+bno.getCalibration(&system2, &gyro, &accel, &mag);
 
 
 //Get Average Battery Voltage
@@ -195,7 +288,7 @@ if(battIndex >= battReadings){
   battIndex = 0;
 }
 battValueAvg = battTotal / battReadings;
-float battVoltage = battValueAvg*(5.3/1023);
+battVoltage = battValueAvg*(5.3/1023);
 
   
 //Get array of data from Radio
@@ -203,12 +296,14 @@ radio.startListening();
 if (radio.available()) {
     radio.read(&desired, sizeof(desired));
   }
-    
+
+ 
 //parse the array that was recieved
   dh=desired[0]; //desired heading
   float dt=desired[1]; //deisred tilt
   rst=desired[2]; //Reset signal
   motorDrive=desired[3]; //drive yes/no
+
 
 //Calculate dh difference for manual operation
 diff=dh-lastDh;
@@ -227,12 +322,11 @@ else if(diff<180){
   diff=diff+360;
 }
 
-diff=diff*100;                                 // use this line to adjust sensitivity of movement
+diff=diff*100;                                 // use this line to adjust sensitivity of manual movement
 diffX=diffX+diff;
 lastDh=dh;
 
 //decay differnce over time
-
 if(diffX>0){
   diffX=diffX-loopTime;
     if(diffX<0){
@@ -248,18 +342,18 @@ if(diffX<0){
 }
 
   
-// Get new sensor data, old method
+// Get new sensor data, euler method
 sensors_event_t event;
 bno.getEvent(&event);
-float ch = (event.orientation.x)+90;
+ch = (event.orientation.x)+90;
 {
   if(ch>=360)
   {
   ch=ch-360;
   }
 }
-float tilt = (event.orientation.y)+tiltCorrect;
-float roll = (event.orientation.z)+rollCorrect;
+tilt = (event.orientation.y);            
+roll = (event.orientation.z);
 
 
 //Quaternion method
@@ -281,26 +375,27 @@ if(ch<0){
 }
 */
 
-// Sensor Reset
-
+// Erase calibration data from EEPROM and reset sensor 
 if (rst == 1){
+
+  for (int i = 0 ; i < EEPROM.length() ; i++) {
+    EEPROM.write(i, 0);
+  }
+  
   initializeSensor();
 
 }
 
-if (tilt>5 || tilt<-5 || roll>5 || roll<-5){
-  maestro.setTarget(0,6000);
+//Reset Sensor if tilt or roll get too far off
+if (tilt>70 || tilt<-70 || roll>70 || roll<-70){
+  maestro.setTarget(0,6000); //Stop Pan Motor
   initializeSensor();  
+  delay(2000);
 }
 
+sendIt();
 
-//Put data into an array for sending back to controller
-float payload[] = {battVoltage, ch, tilt, roll, system, gyro, accel, mag};
 
-//Send info back to controller
-delay(5);
-radio.stopListening();
-radio.write(&payload, sizeof(payload));
 
 
 //pan heading correction math
@@ -328,7 +423,7 @@ int Period=map(Output,-1023,1023,8000,4000);
 
 //Pan Motor Driving
 if (motorDrive==1){                              // Auto
-  if (uhe<-.4 || uhe>.4)
+  if (uhe<-.4 || uhe>.4)                            // change numbers to adjust deadband
   {
   maestro.setTarget(0,Period);
   myPID.SetOutputLimits(-1023,1023);
@@ -360,13 +455,13 @@ maestro.setTarget(1,microSecZ);
   Serial.print("\tPan: ");
   Serial.print(ch);
   Serial.print(" / ");
-  Serial.print(dh);
+  Serial.print(tilt);
   Serial.print(" / ");
-  Serial.print(Period);
+  Serial.print(roll);
   Serial.print("\tDiff: ");
   Serial.print(diffX);
   Serial.print(" / ");
-  Serial.println(loopTime);
+  Serial.println(isCalibrated);
  // Serial.print("\troll ");
   //Serial.println(roll);
   //Serial.print(" / ");

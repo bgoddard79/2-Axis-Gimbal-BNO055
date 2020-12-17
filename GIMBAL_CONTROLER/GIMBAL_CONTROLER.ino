@@ -23,13 +23,9 @@ RF24 radio(7, 8); // CE, CSN
 //const byte addresses[][6] = {"A0002","B0002"}; //Green
 const byte addresses[][6] = {"A0003","B0003"}; //Black
 
-//ENcoder Setup
+//Encoder Setup
 Encoder panKnob(2,4);
 Encoder tiltKnob(3,5);
-
-
-
-
 
 //Button Setup
 #define BUTTON_PINA 6
@@ -39,7 +35,7 @@ EasyButton tiltbutton(BUTTON_PINB);
 
 
 //Constants and Variables
-float payload[8];
+int payload[9];
 long previousMillis = 0;
 long interval = 500;
 int data=0;
@@ -49,7 +45,7 @@ long oldPanAngle  = -999;
 long oldTiltAngle = -999;
 float desiredHeading = 0;
 float desiredTilt = 0;
-const float panSlow = .5;
+const float panSlow = .5;   // changing these in ints would save space
 const float panMed = 1;
 const float panFast = 2.5;
 const float tiltSlow = .5;
@@ -58,6 +54,7 @@ const float tiltFast = 2.5;
 float panInc=panMed;
 float tiltInc=tiltMed;
 float ch;
+int isCalibrated=0;
 
 
 // Callback function to be called when the button is pressed.
@@ -230,15 +227,26 @@ if (radio.available()){
 radio.read(&payload, sizeof(payload));
 }
 
+
+
 //parse the array that was recieved
-float battVoltageFlt = payload[0];
-ch = payload[1];
-float roll = payload[2];
-float tilt = payload[3];
+int battVoltageX100 = payload[0];
+int chX10 = payload[1];
+int rollX10 = payload[2];
+int tiltX10 = payload[3];
 int system = payload[4];
 int gyro = payload[5];
 int accel = payload[6];
 int mag = payload[7];
+isCalibrated = payload[8];
+
+float battVoltageFlt = (float) battVoltageX100/100; // need to fix this,look at meter***********************************
+ch = (float) chX10/10;
+float roll = (float) rollX10/10;
+float tilt = (float) tiltX10/10;
+
+
+
 
 
 //converting battery voltage to meter level
@@ -255,7 +263,7 @@ int meterLevel = battLevel/4;
   display.setTextColor(WHITE);
 
 //Screen 1, displayed on start up. Desired angles, batt meter, and Adjustment sensitivty
-if (data == 0){
+if (data == 0 && isCalibrated == 1){
 // display of desired angles
   display.setTextSize(2);
   display.setCursor(0,24);
@@ -274,10 +282,10 @@ if (data == 0){
   display.setTextSize(1);
   display.setCursor(110,24);
   if(drive==0){
-    display.print("OFF");
+    display.print("MAN");
   }
   else if(drive==1){
-    display.print("ON");
+    display.print("AUT");
   }
   
 
@@ -317,7 +325,7 @@ if (data == 0){
 
 }
 
-else if (data == 1){
+else if (data == 1 && isCalibrated == 1){
   
 // display IMU senor readings
   display.setTextSize(2);
@@ -384,6 +392,34 @@ else if (data == 1){
   
 }
 
+
+else if (isCalibrated == 0){
+  
+
+
+// display of sensor calibration data
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print("G");
+  display.setCursor(11,0);
+  display.print("A");
+  display.setCursor(23,0);
+  display.print("M");
+  display.setCursor(35,0);
+  display.print("S");
+  display.setCursor(0,8);
+  display.print(gyro);
+  display.setCursor(11,8);
+  display.print(accel);
+  display.setCursor(23,8);
+  display.print(mag);
+  display.setCursor(35,8);
+  display.print(system);
+  display.drawLine(8, 0, 8, 16, WHITE);
+  display.drawLine(19, 0, 19, 16, WHITE);
+  display.drawLine(31, 0, 31, 16, WHITE);
+  
+}
   
 
 
@@ -396,6 +432,7 @@ else if (data == 1){
 
 
  display.display();
+
 
  
  
