@@ -36,8 +36,9 @@ int periodM=6000;
 float battVoltage;
 float tilt;
 float roll;
-bool isCalibrated = 1;
+int isCalibrated;
 uint8_t system2, gyro, accel, mag;
+int resetNum=0;
 
 
 //Radio Setup
@@ -107,12 +108,16 @@ void initializeSensor(void)
     bno.getEvent(&event);
     /* always recal the mag as It goes out of calibration very often */
     if (foundCalib){
-        Serial.println("Move sensor slightly to calibrate magnetometers");
+        Serial.println("Move sensor slightly to calibrate magnetometers");  //Commented this out on 12/21/20 to help remotely code 
+/*       
         while (!bno.isFullyCalibrated())
         {
+            isCalibrated=2;
             bno.getEvent(&event);
             delay(BNO055_SAMPLERATE_DELAY_MS);
+            sendIt();
         }
+        */
     }
     else
     {
@@ -129,6 +134,15 @@ void initializeSensor(void)
             Serial.print(event.orientation.z, 4);
             Serial.print("\tCal: ");
             Serial.println(isCalibrated); 
+            Serial.println("Calibration Values:");
+            Serial.print("Gyro: ");
+            Serial.print(gyro);
+            Serial.print("\tAccel: ");
+            Serial.print(accel);
+            Serial.print("\tMag: ");
+            Serial.print(mag);
+            Serial.print("\tSys: ");
+            Serial.println(system2);
 
             /* Optional: Display calibration status */
 //            displayCalStatus();
@@ -138,7 +152,7 @@ void initializeSensor(void)
 
 //**************************** Send info back while calibrating******************
 
-isCalibrated=0;
+isCalibrated=2;
 
  // uint8_t system2, gyro, accel, mag;
   system2 = gyro = accel = mag = 0;
@@ -190,7 +204,7 @@ int rollX10 = roll * 10;
 
 
 //Put data into an array for sending back to controller
-int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated};
+int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated, resetNum};
 
 /*
 // Print contents of array for debug
@@ -227,7 +241,7 @@ PID myPID(&uhe, &Output, &Setpoint,40,20,.5,P_ON_E, DIRECT);
   
 void setup() {
 
-Serial.begin(9600);
+Serial.begin(115200);
 Serial.println("Gimbal Startup");
 
 //Maestro Initalize
@@ -390,6 +404,7 @@ if (rst == 1){
 if (tilt>70 || tilt<-70 || roll>70 || roll<-70){
   maestro.setTarget(0,6000); //Stop Pan Motor
   initializeSensor();  
+  resetNum=++resetNum;
   delay(2000);
 }
 
@@ -449,25 +464,31 @@ maestro.setTarget(1,microSecZ);
 
 
 //debug
-//  displayCalStatus(); 
-  //Serial.print("\tBatt ");
-  //Serial.print(battVoltage);
-  Serial.print("\tPan: ");
+
+  Serial.print("Battery Voltage: ");
+  Serial.println(battVoltage);
+  Serial.println("Sensor Values");
+  Serial.print("Pan: ");
   Serial.print(ch);
-  Serial.print(" / ");
+  Serial.print("\tTilt: ");
   Serial.print(tilt);
-  Serial.print(" / ");
-  Serial.print(roll);
-  Serial.print("\tDiff: ");
-  Serial.print(diffX);
-  Serial.print(" / ");
+  Serial.print("\tRoll: ");
+  Serial.println(roll);
+  Serial.println("Calibration Values:");
+  Serial.print("Gyro: ");
+  Serial.print(gyro);
+  Serial.print("\tAccel: ");
+  Serial.print(accel);
+  Serial.print("\tMag: ");
+  Serial.print(mag);
+  Serial.print("\tSys: ");
+  Serial.println(system2);
+  Serial.print("Calibration Status: ");
   Serial.println(isCalibrated);
- // Serial.print("\troll ");
-  //Serial.println(roll);
-  //Serial.print(" / ");
-  //Serial.print(microSecZ);
-  //Serial.print(" / ");
-  //Serial.println(battVoltage);
+  Serial.print(F("# Of Resets: "));
+  Serial.println(resetNum);
+  Serial.println();
+
 
 
 }
