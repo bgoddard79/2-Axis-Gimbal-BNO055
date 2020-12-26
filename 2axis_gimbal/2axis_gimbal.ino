@@ -163,7 +163,7 @@ sendIt();
 
 
             /* Wait the specified delay before requesting new data */
-            delay(BNO055_SAMPLERATE_DELAY_MS);
+          //  delay(BNO055_SAMPLERATE_DELAY_MS);
             
          
         }
