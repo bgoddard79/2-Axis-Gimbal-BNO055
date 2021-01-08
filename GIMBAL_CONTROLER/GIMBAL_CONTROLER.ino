@@ -37,7 +37,7 @@ EasyButton tiltbutton(BUTTON_PINB);
 //Constants and Variables
 int payload[10];
 long previousMillis = 0;
-long interval = 500;
+long interval = 100;
 int data=0;
 int rst=0;
 bool drive=0;
@@ -65,6 +65,10 @@ int mag;
 int system2;
 int radioChannel = 109;
 int resetNum;
+bool lostConnect=0;
+float battVoltageFlt;
+float roll;
+float tilt;
 
 
 // Callback function to be called when the button is pressed.
@@ -115,6 +119,34 @@ void panLong(){
     rst=1;
   }
 
+}
+
+void recieve(void){
+
+radio.startListening();
+if (radio.available()){
+radio.read(&payload, sizeof(payload));
+}
+//parse the array that was recieved
+battVoltageX100 = payload[0];
+chX10 = payload[1];
+rollX10 = payload[2];
+tiltX10 = payload[3];
+system2 = payload[4];
+gyro = payload[5];
+accel = payload[6];
+mag = payload[7];
+isCalibrated = payload[8];
+resetNum = payload[9];
+                                   
+memset(payload, 0, sizeof(payload));            // Delete contents of payload array to ensure fresh data
+
+
+battVoltageFlt = (float) battVoltageX100/100; // need to fix this,look at meter***********************************
+ch = (float) chX10/10;
+roll = (float) rollX10/10;
+tilt = (float) tiltX10/10;
+ 
 }
 
 //Splash Screen Logo
@@ -233,32 +265,25 @@ previousMillis = currentMillis;
 }
 
 
-delay(5);
-radio.startListening();
-if (radio.available()){
-radio.read(&payload, sizeof(payload));
+recieve();
+
+
+//set back to manual if connection to gimbal is lost
+if(isCalibrated==0 && drive == 1){
+  drive=0;
+  lostConnect=1;
 }
-//parse the array that was recieved
-battVoltageX100 = payload[0];
-chX10 = payload[1];
-rollX10 = payload[2];
-tiltX10 = payload[3];
-system2 = payload[4];
-gyro = payload[5];
-accel = payload[6];
-mag = payload[7];
-isCalibrated = payload[8];
-resetNum = payload[9];
-                                   
-memset(payload, 0, sizeof(payload));            // Delete contents of payload array to ensure fresh data
 
 
-float battVoltageFlt = (float) battVoltageX100/100; // need to fix this,look at meter***********************************
-ch = (float) chX10/10;
-float roll = (float) rollX10/10;
-float tilt = (float) tiltX10/10;
-
-
+if(isCalibrated != 0 && lostConnect == 1){
+  delay(12000);
+  recieve();
+  delay(30);
+  recieve();
+  desiredHeading = ch;
+  drive = 1;
+  lostConnect = 0;
+}
 
 
 

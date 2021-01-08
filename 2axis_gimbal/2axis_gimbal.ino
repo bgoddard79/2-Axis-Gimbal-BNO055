@@ -322,9 +322,7 @@ if (radio.available()) {
 //Calculate dh difference for manual operation
 diff=dh-lastDh;
 
-if(diff>10){
-  diff=0;
-}
+
 
 if(diff<=180 && diff>=-180){
   diff=diff;
@@ -334,6 +332,10 @@ else if(diff>180){
 }
 else if(diff<180){
   diff=diff+360;
+}
+
+if(diff>10 || diff<10){
+  diff=0;
 }
 
 diff=diff*100;                                 // use this line to adjust sensitivity of manual movement
@@ -464,7 +466,7 @@ maestro.setTarget(1,microSecZ);
 
 
 //debug
-
+/*
   Serial.print("Battery Voltage: ");
   Serial.println(battVoltage);
   Serial.println("Sensor Values");
@@ -488,6 +490,15 @@ maestro.setTarget(1,microSecZ);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
   Serial.println();
+  */
+  Serial.print("Current Heading: ");
+  Serial.print(ch);
+  Serial.print("\tDesired Heading: ");
+  Serial.print(dh);
+  Serial.print("\tDiff: ");
+  Serial.print(diff);
+  Serial.print("\tDiffX: ");
+  Serial.println(diffX);
 
 
 
