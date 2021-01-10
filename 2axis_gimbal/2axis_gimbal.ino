@@ -334,7 +334,7 @@ else if(diff<180){
   diff=diff+360;
 }
 
-if(diff>10 || diff<10){
+if(diff>10 || diff<-10){
   diff=0;
 }
 
