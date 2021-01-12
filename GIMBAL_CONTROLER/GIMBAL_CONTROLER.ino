@@ -65,10 +65,11 @@ int mag;
 int system2;
 int radioChannel = 109;
 int resetNum;
-bool lostConnect=0;
+int lostConnect=0;
 float battVoltageFlt;
 float roll;
 float tilt;
+unsigned long reConnectTime=0;
 
 
 // Callback function to be called when the button is pressed.
@@ -274,16 +275,20 @@ if(isCalibrated==0 && drive == 1){
   lostConnect=1;
 }
 
-
+//restore to auto after waiting 
 if(isCalibrated != 0 && lostConnect == 1){
-  delay(12000);
-  recieve();
-  delay(30);
-  recieve();
-  desiredHeading = ch;
-  drive = 1;
-  lostConnect = 0;
+  reConnectTime = millis();
+  lostConnect = 2;
 }
+
+if(lostConnect == 2){
+  if(currentMillis - reConnectTime >3000){
+      desiredHeading = ch;
+      drive = 1;
+      lostConnect = 0;
+  }
+}
+
 
 
 
@@ -484,6 +489,8 @@ else if (isCalibrated == 0){
   display.print(F("Radio Channel: "));
   display.setCursor(92,16);
   display.print(radioChannel);
+  display.setCursor(92,32);
+  display.print(desiredHeading,1);
 
   
 }
