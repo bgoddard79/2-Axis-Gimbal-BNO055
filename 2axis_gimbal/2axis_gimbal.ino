@@ -39,6 +39,10 @@ float roll;
 int isCalibrated;
 uint8_t system2, gyro, accel, mag;
 int resetNum=0;
+bool resetState=0;
+bool lastResetState=0;
+unsigned long resetStartTime=0;
+unsigned long resetTime=0;
 
 
 //Radio Setup
@@ -402,6 +406,7 @@ if (rst == 1){
 
 }
 
+/*
 //Reset Sensor if tilt or roll get too far off
 if (tilt>70 || tilt<-70 || roll>70 || roll<-70){
   maestro.setTarget(0,6000); //Stop Pan Motor
@@ -409,6 +414,42 @@ if (tilt>70 || tilt<-70 || roll>70 || roll<-70){
   resetNum=++resetNum;
   delay(2000);
 }
+*/
+
+if (tilt>70 || tilt<-70 || roll>70 || roll<-70) {
+  resetState=1;
+} else {
+  resetState=0;
+}
+
+if (resetState != lastResetState) {
+  if(resetState == 1){
+    resetStartTime=millis();
+  }
+}
+
+lastResetState = resetState;
+resetTime=currentTime-resetStartTime;
+
+  Serial.print("Reset State: ");
+  Serial.print(resetState);
+  Serial.print("\tCurrent TIme: ");
+  Serial.print(currentTime);
+  Serial.print("\tReset Start Time: ");
+  Serial.print(resetStartTime);
+  Serial.print("\tTime Delay: ");
+  Serial.println(resetTime);
+
+if(resetState==1){
+  if(resetTime > 10000 && resetTime < 200000){
+    maestro.setTarget(0,6000); //Stop Pan Motor
+    initializeSensor();  
+    resetNum=++resetNum;
+    delay(2000);
+  }
+}
+
+
 
 sendIt();
 
@@ -491,14 +532,7 @@ maestro.setTarget(1,microSecZ);
   Serial.println(resetNum);
   Serial.println();
   */
-  Serial.print("Current Heading: ");
-  Serial.print(ch);
-  Serial.print("\tDesired Heading: ");
-  Serial.print(dh);
-  Serial.print("\tDiff: ");
-  Serial.print(diff);
-  Serial.print("\tDiffX: ");
-  Serial.println(diffX);
+
 
 
 
