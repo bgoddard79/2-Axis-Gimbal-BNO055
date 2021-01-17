@@ -395,8 +395,15 @@ if(ch<0){
 }
 */
 
-// Erase calibration data from EEPROM and reset sensor 
+// Reset sensor 
 if (rst == 1){
+ 
+  initializeSensor();
+
+}
+
+// Erase calibration data from EEPROM and reset sensor 
+if (rst == 2){
 
   for (int i = 0 ; i < EEPROM.length() ; i++) {
     EEPROM.write(i, 0);

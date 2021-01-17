@@ -78,6 +78,9 @@ void tiltLong() {
     data=1;
   }
   else if(data == 1){
+    data=2;
+  }
+  else if(data == 2){
     data=0;
   }
 }
@@ -118,6 +121,9 @@ void panLong(){
   }
   else if(data == 1){
     rst=1;
+  }
+  else if(data == 2){
+    rst=2;
   }
 
 }
@@ -179,6 +185,18 @@ void setup() {
 display.begin(SSD1306_SWITCHCAPVCC, 0x3c);  // initialize with the I2C addr 0x3D (for the 128x64)
 display.clearDisplay();
 display.drawBitmap(40,16,logo1,48,48, WHITE); //display logo for 5 sec
+display.display();
+delay(1500);
+display.clearDisplay();
+display.setTextColor(WHITE);
+display.setTextSize(2);
+display.setCursor(0,16);
+display.print(F("Revolute"));
+display.setCursor(0,32);
+display.print(F("One"));
+display.setTextSize(1);
+display.setCursor(90,56);
+display.print(F("V 0.1"));
 display.display();
 delay(1500);
 
@@ -445,11 +463,18 @@ else if (data == 1 && isCalibrated == 1){
   
 }
 
+else if (data == 2 && isCalibrated == 1){
+  display.setTextSize(1);
+  display.setCursor(0,16);
+  display.print(F("To Reset Calibration"));
+  display.setCursor(0,32);
+  display.print(F("Long Press Pan Knob"));  
+  
+}
+
 
 else if (isCalibrated == 2){
   
-
-
 // display of sensor calibration data
   display.setTextSize(1);
   display.setCursor(0,0);
