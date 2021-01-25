@@ -523,7 +523,7 @@ else if (isCalibrated == 0){
 
  display.display();
 
- /*
+ 
   Serial.print(F("Battery Voltage: "));
   Serial.println(battVoltageFlt);
   Serial.println(F("Sensor Values"));
@@ -547,14 +547,15 @@ else if (isCalibrated == 0){
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
   Serial.println();
-*/
 
+
+/*
   Serial.print(F("Drive: "));
   Serial.print(drive);
   Serial.print(F("\tlostConnect: "));
   Serial.print(lostConnect);
   Serial.print(F("\tisCalibrated: "));
   Serial.println(isCalibrated);
-
+*/
  
 }
