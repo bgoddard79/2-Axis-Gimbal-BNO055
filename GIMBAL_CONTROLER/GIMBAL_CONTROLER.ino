@@ -23,13 +23,9 @@ RF24 radio(7, 8); // CE, CSN
 //const byte addresses[][6] = {"A0002","B0002"}; //Green
 const byte addresses[][6] = {"A0003","B0003"}; //Black
 
-//ENcoder Setup
+//Encoder Setup
 Encoder panKnob(2,4);
 Encoder tiltKnob(3,5);
-
-
-
-
 
 //Button Setup
 #define BUTTON_PINA 6
@@ -39,9 +35,9 @@ EasyButton tiltbutton(BUTTON_PINB);
 
 
 //Constants and Variables
-float payload[8];
+int payload[10];
 long previousMillis = 0;
-long interval = 500;
+long interval = 100;
 int data=0;
 int rst=0;
 bool drive=0;
@@ -49,7 +45,7 @@ long oldPanAngle  = -999;
 long oldTiltAngle = -999;
 float desiredHeading = 0;
 float desiredTilt = 0;
-const float panSlow = .5;
+const float panSlow = .5;   // changing these in ints would save space
 const float panMed = 1;
 const float panFast = 2.5;
 const float tiltSlow = .5;
@@ -57,6 +53,23 @@ const float tiltMed = 1;
 const float tiltFast = 2.5;
 float panInc=panMed;
 float tiltInc=tiltMed;
+float ch;
+int isCalibrated;
+int battVoltageX100;
+int chX10;
+int rollX10;
+int tiltX10;
+int gyro;
+int accel;
+int mag;
+int system2;
+int radioChannel = 109;
+int resetNum;
+int lostConnect=0;
+float battVoltageFlt;
+float roll;
+float tilt;
+unsigned long reConnectTime=0;
 
 
 // Callback function to be called when the button is pressed.
@@ -65,6 +78,9 @@ void tiltLong() {
     data=1;
   }
   else if(data == 1){
+    data=2;
+  }
+  else if(data == 2){
     data=0;
   }
 }
@@ -96,6 +112,7 @@ void panShort(){
 void panLong(){
   if(data == 0){
     if(drive == 0){
+      desiredHeading= ch; 
       drive=1;
   }
     else if(drive == 1){
@@ -105,7 +122,38 @@ void panLong(){
   else if(data == 1){
     rst=1;
   }
+  else if(data == 2){
+    rst=2;
+  }
 
+}
+
+void recieve(void){
+
+radio.startListening();
+if (radio.available()){
+radio.read(&payload, sizeof(payload));
+}
+//parse the array that was recieved
+battVoltageX100 = payload[0];
+chX10 = payload[1];
+rollX10 = payload[2];
+tiltX10 = payload[3];
+system2 = payload[4];
+gyro = payload[5];
+accel = payload[6];
+mag = payload[7];
+isCalibrated = payload[8];
+resetNum = payload[9];
+                                   
+memset(payload, 0, sizeof(payload));            // Delete contents of payload array to ensure fresh data
+
+
+battVoltageFlt = (float) battVoltageX100/100; // need to fix this,look at meter***********************************
+ch = (float) chX10/10;
+roll = (float) rollX10/10;
+tilt = (float) tiltX10/10;
+ 
 }
 
 //Splash Screen Logo
@@ -139,17 +187,29 @@ display.clearDisplay();
 display.drawBitmap(40,16,logo1,48,48, WHITE); //display logo for 5 sec
 display.display();
 delay(1500);
+display.clearDisplay();
+display.setTextColor(WHITE);
+display.setTextSize(2);
+display.setCursor(0,16);
+display.print(F("Revolute"));
+display.setCursor(0,32);
+display.print(F("One"));
+display.setTextSize(1);
+display.setCursor(90,56);
+display.print(F("V 0.1"));
+display.display();
+delay(1500);
 
 //Radio Initalize
 radio.begin();
-radio.setChannel(109);
+radio.setChannel(radioChannel);
 //radio.setDataRate(RF24_250KBPS);
 radio.setPALevel(RF24_PA_LOW);
 radio.openWritingPipe(addresses[1]);
 radio.openReadingPipe(1,addresses[0]);
 //int PA=radio.getPALevel();
 
-Serial.begin(9600);
+Serial.begin(115200);
 
 // Initialize the buttons.
 panbutton.begin();
@@ -216,27 +276,37 @@ radio.stopListening();
 radio.write(&desired, sizeof(desired));
 
 
-//check millis to see if its time to recieve data
+
+
+
+
+
+recieve();
+
+
+//set back to manual if connection to gimbal is lost
+if(isCalibrated==0 && drive == 1){
+  drive=0;
+  lostConnect=1;
+}
+
+//restore to auto after waiting 
+if(isCalibrated != 0 && lostConnect == 1){
+  reConnectTime = millis();
+  lostConnect = 2;
+}
+
 unsigned long currentMillis = millis();
 
-if(currentMillis - previousMillis > interval){
-previousMillis = currentMillis;
-}
-delay(5);
-radio.startListening();
-if (radio.available()){
-radio.read(&payload, sizeof(payload));
+if(lostConnect == 2){
+  if(currentMillis - reConnectTime >3000){
+      desiredHeading = ch;
+      drive = 1;
+      lostConnect = 0;
+  }
 }
 
-//parse the array that was recieved
-float battVoltageFlt = payload[0];
-float ch = payload[1];
-float roll = payload[2];
-float tilt = payload[3];
-int system = payload[4];
-int gyro = payload[5];
-int accel = payload[6];
-int mag = payload[7];
+
 
 
 //converting battery voltage to meter level
@@ -247,19 +317,22 @@ int battLevel = map(battVoltageInt, 300, 415, 0, 100);
 battLevel = constrain(battLevel, 0, 100);
 int meterLevel = battLevel/4;
 
+
 //display section
 
   display.clearDisplay();
   display.setTextColor(WHITE);
 
 //Screen 1, displayed on start up. Desired angles, batt meter, and Adjustment sensitivty
-if (data == 0){
+if (data == 0 && isCalibrated == 1){
+
+  
 // display of desired angles
   display.setTextSize(2);
   display.setCursor(0,24);
-  display.print("TILT");
+  display.print(F("TILT"));
   display.setCursor(68,24);
-  display.print("PAN");
+  display.print(F("PAN"));
   display.setCursor(0,47); 
   display.print(desiredTilt,1);
   display.setCursor(68,47);
@@ -272,10 +345,10 @@ if (data == 0){
   display.setTextSize(1);
   display.setCursor(110,24);
   if(drive==0){
-    display.print("OFF");
+    display.print(F("MAN"));
   }
   else if(drive==1){
-    display.print("ON");
+    display.print(F("AUT"));
   }
   
 
@@ -315,22 +388,30 @@ if (data == 0){
 
 }
 
-else if (data == 1){
+else if (data == 1 && isCalibrated == 1){
   
 // display IMU senor readings
-  display.setTextSize(2);
-  display.setCursor(5,16);
-  display.print("PAN :");
-  display.setCursor(65,16);
+  display.setTextSize(1);
+  display.setCursor(0,16);
+  display.print(F("PAN :"));
+  display.setCursor(32,16);
   display.print(ch,1);
-  display.setCursor(5,32);
-  display.print("ROLL:");
-  display.setCursor(65,32);
+  display.setCursor(0,26);
+  display.print(F("ROLL:"));
+  display.setCursor(32,26);
   display.print(roll,1);
-  display.setCursor(5,48);
-  display.print("TILT:");
-  display.setCursor(65,48);
+  display.setCursor(0,36);
+  display.print(F("TILT:"));
+  display.setCursor(32,36);
   display.print(tilt,1);
+  display.setCursor(0,46);
+  display.print(F("BATT VOLTS: "));
+  display.setCursor(67,46);
+  display.print(battVoltageFlt*2);
+  display.setCursor(0,56);
+  display.print(F("# OF RESETS: "));
+  display.setCursor(72,56);
+  display.print(resetNum);
 
 //Battery percentage position, moves the starting number based on 1, 2 or 3 digits
   int battPos;
@@ -352,22 +433,22 @@ else if (data == 1){
 // Battery Percent display
   display.setTextSize(1);
   display.setCursor(104,0);
-  display.print("BATT");
+  display.print(F("BATT"));
   display.setCursor(battPos,8);
   display.print(battLevel);
   display.setCursor(122,8);
-  display.print("%");
+  display.print(F("%"));
 
 // display of sensor calibration data
   display.setTextSize(1);
   display.setCursor(0,0);
-  display.print("G");
+  display.print(F("G"));
   display.setCursor(11,0);
-  display.print("A");
+  display.print(F("A"));
   display.setCursor(23,0);
-  display.print("M");
+  display.print(F("M"));
   display.setCursor(35,0);
-  display.print("S");
+  display.print(F("S"));
   display.setCursor(0,8);
   display.print(gyro);
   display.setCursor(11,8);
@@ -375,26 +456,106 @@ else if (data == 1){
   display.setCursor(23,8);
   display.print(mag);
   display.setCursor(35,8);
-  display.print(system);
-  display.drawLine(8, 0, 8, 16, WHITE);
-  display.drawLine(19, 0, 19, 16, WHITE);
-  display.drawLine(31, 0, 31, 16, WHITE);
+  display.print(system2);
+  display.drawLine(8, 0, 8, 15, WHITE);
+  display.drawLine(19, 0, 19, 15, WHITE);
+  display.drawLine(31, 0, 31, 15, WHITE);
   
 }
 
+else if (data == 2 && isCalibrated == 1){
+  display.setTextSize(1);
+  display.setCursor(0,16);
+  display.print(F("To Reset Calibration"));
+  display.setCursor(0,32);
+  display.print(F("Long Press Pan Knob"));  
+  
+}
+
+
+else if (isCalibrated == 2){
+  
+// display of sensor calibration data
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print(F("Please Calibrate"));
+  display.setCursor(0,8);
+  display.print(F("Sensor"));
+  display.setTextSize(2);
+  display.setCursor(0,18);
+  display.print(F("G: "));
+  display.setCursor(24,18);
+  display.print(gyro);
+  display.setCursor(68,18);
+  display.print(F("A: "));
+  display.setCursor(92,18);
+  display.print(accel);
+  display.setCursor(0,42);
+  display.print(F("M: "));
+  display.setCursor(24,42);
+  display.print(mag);
+  display.setCursor(68,42);
+  display.print(F("S: "));
+  display.setCursor(92,42);
+  display.print(system2);
+
+  
+}
+else if (isCalibrated == 0){
   
 
 
+// display of sensor calibration data
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print(F("No Gimbal Detected"));
+  display.setCursor(0,16);
+  display.print(F("Radio Channel: "));
+  display.setCursor(92,16);
+  display.print(radioChannel);
+  display.setCursor(92,32);
+  display.print(desiredHeading,1);
 
-
-
-
-
+  
+}
 
 
 
  display.display();
 
  
+  Serial.print(F("Battery Voltage: "));
+  Serial.println(battVoltageFlt);
+  Serial.println(F("Sensor Values"));
+  Serial.print(F("Pan: "));
+  Serial.print(ch);
+  Serial.print(F("\tTilt: "));
+  Serial.print(tilt);
+  Serial.print(F("\tRoll: "));
+  Serial.println(roll);
+  Serial.println(F("Calibration Values:"));
+  Serial.print(F("Gyro: "));
+  Serial.print(gyro);
+  Serial.print(F("\tAccel: "));
+  Serial.print(accel);
+  Serial.print(F("\tMag: "));
+  Serial.print(mag);
+  Serial.print(F("\tSys: "));
+  Serial.println(system2);
+  Serial.print(F("Calibration Status: "));
+  Serial.println(isCalibrated);
+  Serial.print(F("# Of Resets: "));
+  Serial.println(resetNum);
+  Serial.println();
+
+
+/*
+  Serial.print(F("Drive: "));
+  Serial.print(drive);
+  Serial.print(F("\tlostConnect: "));
+  Serial.print(lostConnect);
+  Serial.print(F("\tisCalibrated: "));
+  Serial.println(isCalibrated);
+*/
  
 }
