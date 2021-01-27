@@ -6,10 +6,12 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
-#include <PololuMaestro.h>
+//#include <PololuMaestro.h>
+#include <Adafruit_PWMServoDriver.h>
 
 
 //Servo Controller Setup
+/*
 #ifdef SERIAL_PORT_HARDWARE_OPEN
 #define maestroSerial SERIAL_PORT_HARDWARE_OPEN
 #else
@@ -18,6 +20,8 @@
 #endif
 
 MicroMaestro maestro(maestroSerial);
+*/
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 //IMU Setup
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
@@ -40,7 +44,7 @@ float desired[4]; //array that radio recieves
 float rollCorrect = -1.3;
 float tiltCorrect = .24;
 //int rollCenter = 1465;
-int tiltCenter = 1725;
+int tiltCenter = 1500;
 float degPerUs = 10.33;
 const int battReadings = 20;
 int battValue[battReadings];
@@ -53,7 +57,7 @@ unsigned long lastTime=0;
 int loopTime;
 float dh, diff, diffX;
 float lastDh=0;
-int periodM=6000;
+int periodM=1500;
 
 
 void setup() {
@@ -64,8 +68,14 @@ Serial.begin(9600);
 Serial.println("Gimbal Startup");
 
 //Maestro Initalize
+/*
 maestroSerial.begin(9600);
 maestro.setAcceleration(1,10);
+*/
+
+pwm.begin();
+pwm.setOscillatorFrequency(27000000);
+pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
 
 //PID Initalize
 Setpoint = 0;
@@ -277,33 +287,38 @@ radio.write(&payload, sizeof(payload));
 myPID.Compute();
 
 //Output Mapping
-int Period=map(Output,-1023,1023,8000,4000);
+int Period=map(Output,-1023,1023,2000,1000);
 
 //Pan Motor Driving
 if (motorDrive==1){                              // Auto
   if (uhe<-.4 || uhe>.4)
   {
-  maestro.setTarget(0,Period);
+  //maestro.setTarget(0,Period);
+  pwm.writeMicroseconds(1, Period);
   myPID.SetOutputLimits(-1023,1023);
   }
   else if (uhe>-.4 && uhe<.4)
   {
-  maestro.setTarget(0,6000);
+  //maestro.setTarget(0,6000);
+  pwm.writeMicroseconds(0, 1500);
   myPID.SetOutputLimits(-1,1);
   }
 }
 
 if (motorDrive==0){                           // Manual
 periodM=6000+diffX;
-maestro.setTarget(0,periodM);
+//maestro.setTarget(0,periodM);
+pwm.writeMicroseconds(0, periodM);
 }
 
 
 
 //Tilt Motor Driving
 float servoAnglez=0-dt;
-float microSecZ=((tiltCenter+(servoAnglez*degPerUs)))*4;
-maestro.setTarget(1,microSecZ);
+float microSecZ=((tiltCenter+(servoAnglez*degPerUs)));
+//maestro.setTarget(1,microSecZ);
+
+pwm.writeMicroseconds(1, microSecZ);
 
 
 //debug
@@ -319,7 +334,7 @@ maestro.setTarget(1,microSecZ);
   Serial.print("\tDiff: ");
   Serial.print(diffX);
   Serial.print(" / ");
-  Serial.println(loopTime);
+  Serial.println(microSecZ);
  // Serial.print("\troll ");
   //Serial.println(roll);
   //Serial.print(" / ");
