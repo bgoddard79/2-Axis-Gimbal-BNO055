@@ -6,7 +6,8 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
-#include <PololuMaestro.h>
+//#include <PololuMaestro.h>
+#include <Adafruit_PWMServoDriver.h>
 #include <EEPROM.h>
 #define BNO055_SAMPLERATE_DELAY_MS (100)
 
@@ -19,7 +20,7 @@ float desired[4]; //array that radio recieves
 //float rollCorrect = -1.3;
 //float tiltCorrect = .24;
 //int rollCenter = 1465;
-int tiltCenter = 1725;
+int tiltCenter = 1650;
 float degPerUs = 10.33;
 const int battReadings = 20;
 int battValue[battReadings];
@@ -32,7 +33,7 @@ unsigned long lastTime=0;
 int loopTime;
 float dh, diff, diffX;
 float lastDh=0;
-int periodM=6000;
+int periodM=1500;
 float battVoltage;
 float tilt;
 float roll;
@@ -43,6 +44,11 @@ bool resetState=0;
 bool lastResetState=0;
 unsigned long resetStartTime=0;
 unsigned long resetTime=0;
+long osc;
+byte addrA[5];
+byte addrB[5];
+int channelVal;
+int channel;
 
 
 //Radio Setup
@@ -50,7 +56,7 @@ RF24 radio(7, 8); // CE, CSN
 //Set this to the serial number written on controler board. Temp Uncomment the one you are using
 //const byte addresses[][6] = {"A0001","B0001"}; //Orange
 //const byte addresses[][6] = {"A0002","B0002"}; //Green
-const byte addresses[][6] = {"A0003","B0003"}; //Black
+//const byte addresses[][6] = {"A0003","B0003"}; //Black
 
 
 
@@ -226,6 +232,7 @@ radio.write(&payload, sizeof(payload));
 
 
 //Servo Controller Setup
+/*
 #ifdef SERIAL_PORT_HARDWARE_OPEN
 #define maestroSerial SERIAL_PORT_HARDWARE_OPEN
 #else
@@ -234,6 +241,8 @@ radio.write(&payload, sizeof(payload));
 #endif
 
 MicroMaestro maestro(maestroSerial);
+*/
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 
 
@@ -249,8 +258,15 @@ Serial.begin(115200);
 Serial.println("Gimbal Startup");
 
 //Maestro Initalize
+/*
 maestroSerial.begin(9600);
 maestro.setAcceleration(1,10);
+*/
+
+EEPROM.get(50, osc);  //get oscillator freq from EEPROM
+pwm.begin();
+pwm.setOscillatorFrequency(osc);
+pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
 
 //PID Initalize
 Setpoint = 0;
@@ -259,14 +275,42 @@ myPID.SetMode(AUTOMATIC);
 myPID.SetOutputLimits(-1023,1023);
 
 
+//read jumper pin divider to select radio channel and read trim pot to adjust tilt zero deg position
+pinMode(2, OUTPUT);
+digitalWrite(2, HIGH);
+delay(10);
+channelVal=analogRead(A2);
+digitalWrite(2, LOW);
+
+if(channelVal>=896){
+  channel=109;
+}
+else if(channelVal<896 && channelVal>=640){
+  channel=111;
+}
+else if(channelVal<640 && channelVal>=384){
+  channel=113;
+}
+else if(channelVal<384 && channelVal>=128){
+  channel=115;
+}
+else if(channelVal<128){
+  channel=117;
+}
 
 //Radio Initalize
+
+
+EEPROM.get(60, addrA);
+EEPROM.get(70, addrB);
 radio.begin();
-radio.setChannel(109); //0-124 are avalible
+radio.setChannel(channel); //0-124 are avalible
 //radio.setDataRate(RF24_250KBPS);
 radio.setPALevel(RF24_PA_LOW);
-radio.openWritingPipe(addresses[0]);
-radio.openReadingPipe(1, addresses[1]);
+//radio.openWritingPipe(addresses[0]);     *******old pipe selction remove *******
+//radio.openReadingPipe(1, addresses[1]);
+radio.openWritingPipe(addrA);
+radio.openReadingPipe(1, addrB);
   
 //Battery Readings Initialize to 0
   for (int thisReading = 0; thisReading < battReadings; thisReading++) {
@@ -405,7 +449,7 @@ if (rst == 1){
 // Erase calibration data from EEPROM and reset sensor 
 if (rst == 2){
 
-  for (int i = 0 ; i < EEPROM.length() ; i++) {
+  for (int i = 0 ; i < 49 ; i++) {
     EEPROM.write(i, 0);
   }
   
@@ -437,7 +481,7 @@ if (resetState != lastResetState) {
 
 lastResetState = resetState;
 resetTime=currentTime-resetStartTime;
-
+/*
   Serial.print("Reset State: ");
   Serial.print(resetState);
   Serial.print("\tCurrent TIme: ");
@@ -446,10 +490,11 @@ resetTime=currentTime-resetStartTime;
   Serial.print(resetStartTime);
   Serial.print("\tTime Delay: ");
   Serial.println(resetTime);
-
+*/
 if(resetState==1){
   if(resetTime > 10000 && resetTime < 200000){
-    maestro.setTarget(0,6000); //Stop Pan Motor
+    //maestro.setTarget(0,6000); //Stop Pan Motor
+    pwm.writeMicroseconds(0, 1500);
     initializeSensor();  
     resetNum=++resetNum;
     delay(2000);
@@ -484,37 +529,41 @@ sendIt();
 myPID.Compute();
 
 //Output Mapping
-int Period=map(Output,-1023,1023,8000,4000);
+int Period=map(Output,-1023,1023,1880,880);
 
 //Pan Motor Driving
 if (motorDrive==1){                              // Auto
   if (uhe<-.4 || uhe>.4)                            // change numbers to adjust deadband
   {
-  maestro.setTarget(0,Period);
+  //maestro.setTarget(0,Period);
+  pwm.writeMicroseconds(0, Period);
   myPID.SetOutputLimits(-1023,1023);
   }
   else if (uhe>-.4 && uhe<.4)
   {
-  maestro.setTarget(0,6000);
+  //maestro.setTarget(0,6000);
+  pwm.writeMicroseconds(0, 1500);
   myPID.SetOutputLimits(-1,1);
   }
 }
 
 if (motorDrive==0){                           // Manual
-periodM=6000+diffX;
-maestro.setTarget(0,periodM);
+periodM=1500+diffX;
+//maestro.setTarget(0,periodM);
+pwm.writeMicroseconds(0, periodM);
 }
 
 
 
 //Tilt Motor Driving
 float servoAnglez=0-dt;
-float microSecZ=((tiltCenter+(servoAnglez*degPerUs)))*4;
-maestro.setTarget(1,microSecZ);
+float microSecZ=((tiltCenter+(servoAnglez*degPerUs)));
+//maestro.setTarget(1,microSecZ);
 
+pwm.writeMicroseconds(1, microSecZ);
 
 //debug
-/*
+
   Serial.print("Battery Voltage: ");
   Serial.println(battVoltage);
   Serial.println("Sensor Values");
@@ -538,7 +587,7 @@ maestro.setTarget(1,microSecZ);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
   Serial.println();
-  */
+
 
 
 
