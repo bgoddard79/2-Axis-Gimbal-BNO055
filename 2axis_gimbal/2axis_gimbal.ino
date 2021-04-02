@@ -20,7 +20,8 @@ float desired[4]; //array that radio recieves
 //float rollCorrect = -1.3;
 //float tiltCorrect = .24;
 //int rollCenter = 1465;
-int tiltCenter = 1650;
+int tiltCenter = 1500;
+int tiltTrim;
 float degPerUs = 10.33;
 const int battReadings = 20;
 int battValue[battReadings];
@@ -153,6 +154,12 @@ void initializeSensor(void)
             Serial.print(mag);
             Serial.print("\tSys: ");
             Serial.println(system2);
+            Serial.print(F("Serial Number: "));
+            String serialNum = (char*)addrA;  //convert byte array to printable string
+            Serial.print(serialNum);  
+            Serial.print(F("Radio Channel: "));
+            Serial.println(channel);
+            Serial.println();
 
             /* Optional: Display calibration status */
 //            displayCalStatus();
@@ -280,6 +287,8 @@ pinMode(2, OUTPUT);
 digitalWrite(2, HIGH);
 delay(10);
 channelVal=analogRead(A2);
+tiltTrim=analogRead(A1);
+tiltCenter = map(tiltTrim, 0,1023,1400,1600);
 digitalWrite(2, LOW);
 
 if(channelVal>=896){
@@ -366,7 +375,9 @@ if (radio.available()) {
   rst=desired[2]; //Reset signal
   motorDrive=desired[3]; //drive yes/no
 
+memset(desired, 0, sizeof(desired));            // Delete contents of payload array to ensure fresh data
 
+Serial.println(rst);
 //Calculate dh difference for manual operation
 diff=dh-lastDh;
 
@@ -443,6 +454,8 @@ if(ch<0){
 if (rst == 1){
  
   initializeSensor();
+  rst=0;
+  radio.flush_rx();
 
 }
 
@@ -454,6 +467,8 @@ if (rst == 2){
   }
   
   initializeSensor();
+  rst=0;
+  radio.flush_rx();
 
 }
 
@@ -557,7 +572,7 @@ pwm.writeMicroseconds(0, periodM);
 
 //Tilt Motor Driving
 float servoAnglez=0-dt;
-float microSecZ=((tiltCenter+(servoAnglez*degPerUs)));
+float microSecZ=((tiltCenter-(servoAnglez*degPerUs)));
 //maestro.setTarget(1,microSecZ);
 
 pwm.writeMicroseconds(1, microSecZ);
@@ -586,6 +601,12 @@ pwm.writeMicroseconds(1, microSecZ);
   Serial.println(isCalibrated);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
+  Serial.println(rst);
+  Serial.print(F("Serial Number: "));
+  String serialNum = (char*)addrA;  //convert byte array to printable string
+  Serial.print(serialNum);  
+  Serial.print(F("Radio Channel: "));
+  Serial.println(channel);
   Serial.println();
 
 
