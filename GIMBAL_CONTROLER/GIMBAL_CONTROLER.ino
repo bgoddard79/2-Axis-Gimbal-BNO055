@@ -6,7 +6,7 @@
 #include <EasyButton.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
+#include <EEPROM.h>
 
 //OLED SETUP
 #define OLED_RESET 4
@@ -21,7 +21,8 @@ RF24 radio(7, 8); // CE, CSN
 //Set this to the serial number written on controler board. Temp Uncomment the one you are using
 //const byte addresses[][6] = {"A0001","B0001"}; //Orange
 //const byte addresses[][6] = {"A0002","B0002"}; //Green
-const byte addresses[][6] = {"A0003","B0003"}; //Black
+//const byte addresses[][6] = {"A0003","B0003"}; //Black
+
 
 //Encoder Setup
 Encoder panKnob(2,4);
@@ -40,6 +41,7 @@ long previousMillis = 0;
 long interval = 100;
 int data=0;
 int rst=0;
+int sendCount=0;
 bool drive=0;
 long oldPanAngle  = -999;
 long oldTiltAngle = -999;
@@ -63,13 +65,18 @@ int gyro;
 int accel;
 int mag;
 int system2;
-int radioChannel = 109;
+//int radioChannel = 109;
 int resetNum;
 int lostConnect=0;
 float battVoltageFlt;
 float roll;
 float tilt;
 unsigned long reConnectTime=0;
+char serialNum;
+byte addrA[5];
+byte addrB[5];
+int channelVal;
+int channel;
 
 
 // Callback function to be called when the button is pressed.
@@ -200,14 +207,42 @@ display.print(F("V 0.1"));
 display.display();
 delay(1500);
 
+
+
+//read jumper pin divider to select radio channel 
+
+channelVal=analogRead(A2);
+
+
+if(channelVal>=896){
+  channel=109;
+}
+else if(channelVal<896 && channelVal>=640){
+  channel=111;
+}
+else if(channelVal<640 && channelVal>=384){
+  channel=113;
+}
+else if(channelVal<384 && channelVal>=128){
+  channel=115;
+}
+else if(channelVal<128){
+  channel=117;
+}
+
 //Radio Initalize
+EEPROM.get(60, addrA);
+EEPROM.get(70, addrB);
 radio.begin();
-radio.setChannel(radioChannel);
+radio.setChannel(channel);
 //radio.setDataRate(RF24_250KBPS);
 radio.setPALevel(RF24_PA_LOW);
-radio.openWritingPipe(addresses[1]);
-radio.openReadingPipe(1,addresses[0]);
+radio.openWritingPipe(addrB);
+radio.openReadingPipe(1,addrA);
 //int PA=radio.getPALevel();
+
+
+
 
 Serial.begin(115200);
 
@@ -224,7 +259,21 @@ panbutton.onPressedFor(1000, panLong);
 
 void loop() {
 
-rst=0;
+//rst=0;
+
+
+if(rst==0){
+  rst=0;
+}
+
+else if(rst!=0 && sendCount < 10){
+  sendCount= ++sendCount;
+}
+
+else if(rst!=0 && sendCount >= 10){
+  rst=0;
+  sendCount=0;
+}
 
 // Continuously read the status of the button. 
 panbutton.read();
@@ -269,11 +318,13 @@ long newPanAngle = panKnob.read();
   }
 
 //place desired angles in an array  
+Serial.println(rst);
 float desired[] = {desiredHeading, desiredTilt, rst, drive};
 
 // Send that array To Gimbal
 radio.stopListening();
 radio.write(&desired, sizeof(desired));
+
 
 
 
@@ -408,10 +459,10 @@ else if (data == 1 && isCalibrated == 1){
   display.print(F("BATT VOLTS: "));
   display.setCursor(67,46);
   display.print(battVoltageFlt*2);
-  display.setCursor(0,56);
-  display.print(F("# OF RESETS: "));
-  display.setCursor(72,56);
-  display.print(resetNum);
+  //display.setCursor(0,56);
+  //display.print(F("# OF RESETS: "));
+  //display.setCursor(72,56);
+  //display.print(resetNum);
 
 //Battery percentage position, moves the starting number based on 1, 2 or 3 digits
   int battPos;
@@ -512,9 +563,8 @@ else if (isCalibrated == 0){
   display.setCursor(0,16);
   display.print(F("Radio Channel: "));
   display.setCursor(92,16);
-  display.print(radioChannel);
-  display.setCursor(92,32);
-  display.print(desiredHeading,1);
+  display.print(channel);
+
 
   
 }
@@ -546,7 +596,17 @@ else if (isCalibrated == 0){
   Serial.println(isCalibrated);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
+  Serial.println(rst);
+  Serial.println(sendCount);
+  Serial.print(F("Serial Number: "));
+  String serialNum = (char*)addrA;  //convert byte array to printable string
+  Serial.print(serialNum);
+  Serial.print(F("Radio Channel: "));
+  Serial.println(channel);  
   Serial.println();
+
+
+
 
 
 /*
