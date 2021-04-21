@@ -16,7 +16,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 //Constants and Variables
 float ch;
-float desired[4]; //array that radio recieves
+float desired[5]; //array that radio recieves
 //float rollCorrect = -1.3;
 //float tiltCorrect = .24;
 //int rollCenter = 1465;
@@ -33,6 +33,7 @@ unsigned long currentTime;
 unsigned long lastTime=0;
 int loopTime;
 float dh, diff, diffX;
+float dt;
 float lastDh=0;
 int periodM=1500;
 float battVoltage;
@@ -50,14 +51,19 @@ byte addrA[5];
 byte addrB[5];
 int channelVal;
 int channel;
+//packet tracing variables
+int packetCount;
+float packetsRecieved;
+float packetsMissed;
+int packetLossX100;
+float packetLoss;
+int lastPacketCount;
+
 
 
 //Radio Setup
 RF24 radio(7, 8); // CE, CSN
-//Set this to the serial number written on controler board. Temp Uncomment the one you are using
-//const byte addresses[][6] = {"A0001","B0001"}; //Orange
-//const byte addresses[][6] = {"A0002","B0002"}; //Green
-//const byte addresses[][6] = {"A0003","B0003"}; //Black
+
 
 
 
@@ -221,7 +227,7 @@ int rollX10 = roll * 10;
 
 
 //Put data into an array for sending back to controller
-int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated, resetNum};
+int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated, resetNum, packetLossX100};
 
 /*
 // Print contents of array for debug
@@ -366,18 +372,46 @@ battVoltage = battValueAvg*(5.3/1023);
 radio.startListening();
 if (radio.available()) {
     radio.read(&desired, sizeof(desired));
-  }
+
 
  
 //parse the array that was recieved
   dh=desired[0]; //desired heading
-  float dt=desired[1]; //deisred tilt
+  dt=desired[1]; //deisred tilt
   rst=desired[2]; //Reset signal
   motorDrive=desired[3]; //drive yes/no
+  packetCount=desired[4];
 
-memset(desired, 0, sizeof(desired));            // Delete contents of payload array to ensure fresh data
+  
 
-Serial.println(rst);
+  packetsRecieved = ++packetsRecieved;
+
+  int packetDiff = packetCount-lastPacketCount;
+
+  if (packetDiff > 1 && packetDiff < 100){
+    packetsMissed = packetsMissed+packetDiff;
+  }
+
+packetLoss = (packetsMissed / (packetsRecieved+packetsMissed))*100;
+packetLossX100 = packetLoss*100;
+
+
+ /* 
+  Serial.print("Packets Recieved:");
+  Serial.println(packetsRecieved);
+  Serial.print("Missed Packets:");
+  Serial.println(packetsMissed);
+  Serial.print("Loss:");
+  Serial.print(packetLoss);
+  Serial.println("%");
+  Serial.println();
+
+*/
+  lastPacketCount = packetCount;
+
+
+  }
+
 //Calculate dh difference for manual operation
 diff=dh-lastDh;
 
@@ -601,13 +635,18 @@ pwm.writeMicroseconds(1, microSecZ);
   Serial.println(isCalibrated);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
-  Serial.println(rst);
   Serial.print(F("Serial Number: "));
   String serialNum = (char*)addrA;  //convert byte array to printable string
   Serial.print(serialNum);  
   Serial.print(F("Radio Channel: "));
   Serial.println(channel);
+  Serial.print(F("Packet Loss:"));
+  Serial.print(packetLoss);
+  Serial.println("%");
   Serial.println();
+
+
+  
 
 
 

@@ -36,7 +36,7 @@ EasyButton tiltbutton(BUTTON_PINB);
 
 
 //Constants and Variables
-int payload[10];
+int payload[11];
 long previousMillis = 0;
 long interval = 100;
 int data=0;
@@ -77,7 +77,9 @@ byte addrA[5];
 byte addrB[5];
 int channelVal;
 int channel;
-
+int packetCount=1;
+int packetLossX100;
+float packetLoss;
 
 // Callback function to be called when the button is pressed.
 void tiltLong() {
@@ -152,6 +154,8 @@ accel = payload[6];
 mag = payload[7];
 isCalibrated = payload[8];
 resetNum = payload[9];
+packetLossX100 = payload[10];
+
                                    
 memset(payload, 0, sizeof(payload));            // Delete contents of payload array to ensure fresh data
 
@@ -160,6 +164,7 @@ battVoltageFlt = (float) battVoltageX100/100; // need to fix this,look at meter*
 ch = (float) chX10/10;
 roll = (float) rollX10/10;
 tilt = (float) tiltX10/10;
+packetLoss = (float) packetLossX100/100;
  
 }
 
@@ -266,11 +271,11 @@ if(rst==0){
   rst=0;
 }
 
-else if(rst!=0 && sendCount < 10){
+else if(rst!=0 && sendCount < 20){
   sendCount= ++sendCount;
 }
 
-else if(rst!=0 && sendCount >= 10){
+else if(rst!=0 && sendCount >= 20){
   rst=0;
   sendCount=0;
 }
@@ -318,12 +323,14 @@ long newPanAngle = panKnob.read();
   }
 
 //place desired angles in an array  
-Serial.println(rst);
-float desired[] = {desiredHeading, desiredTilt, rst, drive};
+
+
+float desired[] = {desiredHeading, desiredTilt, rst, drive, packetCount};
 
 // Send that array To Gimbal
 radio.stopListening();
 radio.write(&desired, sizeof(desired));
+packetCount=++packetCount;
 
 
 
@@ -364,7 +371,7 @@ if(lostConnect == 2){
 
 //battVoltageFlt;//dont think this is needed please test 2/20
 int battVoltageInt = battVoltageFlt*100;
-int battLevel = map(battVoltageInt, 300, 415, 0, 100);
+int battLevel = map(battVoltageInt, 300, 410, 0, 100);
 battLevel = constrain(battLevel, 0, 100);
 int meterLevel = battLevel/4;
 
@@ -459,6 +466,10 @@ else if (data == 1 && isCalibrated == 1){
   display.print(F("BATT VOLTS: "));
   display.setCursor(67,46);
   display.print(battVoltageFlt*2);
+  display.setCursor(0,56);
+  display.print(F("PACKET LOSS%:"));
+  display.setCursor(80,56);
+  display.print(packetLoss);
   //display.setCursor(0,56);
   //display.print(F("# OF RESETS: "));
   //display.setCursor(72,56);
@@ -596,11 +607,9 @@ else if (isCalibrated == 0){
   Serial.println(isCalibrated);
   Serial.print(F("# Of Resets: "));
   Serial.println(resetNum);
-  Serial.println(rst);
-  Serial.println(sendCount);
   Serial.print(F("Serial Number: "));
   String serialNum = (char*)addrA;  //convert byte array to printable string
-  Serial.print(serialNum);
+  Serial.println(serialNum);
   Serial.print(F("Radio Channel: "));
   Serial.println(channel);  
   Serial.println();
