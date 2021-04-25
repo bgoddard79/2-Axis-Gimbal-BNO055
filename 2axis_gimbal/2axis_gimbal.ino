@@ -578,7 +578,7 @@ sendIt();
 myPID.Compute();
 
 //Output Mapping
-int Period=map(Output,-1023,1023,1880,880);
+int Period=map(Output,-1023,1023,2000,1000);
 
 //Pan Motor Driving
 if (motorDrive==1){                              // Auto
@@ -644,6 +644,7 @@ pwm.writeMicroseconds(1, microSecZ);
   Serial.print(packetLoss);
   Serial.println("%");
   Serial.println();
+
 
 
   
