@@ -58,6 +58,14 @@ float packetsMissed;
 int packetLossX100;
 float packetLoss;
 int lastPacketCount;
+int8_t boardTemp;
+float spin;
+const int spinLimit=150;  // deg/sec
+const int enableDelayTime=5000;
+int autoEnable=1;
+bool autoEnableToggle=1;
+int autoEnableDelay;
+unsigned long toggleOffTime;
 
 
 
@@ -227,7 +235,7 @@ int rollX10 = roll * 10;
 
 
 //Put data into an array for sending back to controller
-int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated, resetNum, packetLossX100};
+int payload[] = {battVoltageX100, chX10, tiltX10, rollX10, system2, gyro, accel, mag, isCalibrated, resetNum, packetLossX100, autoEnable, boardTemp};
 
 /*
 // Print contents of array for debug
@@ -464,6 +472,33 @@ ch = (event.orientation.x)+90;
 tilt = (event.orientation.y);            
 roll = (event.orientation.z);
 
+//***** 5/3/21 ***** New diagnostic sensor data 
+
+boardTemp = bno.getTemp();
+boardTemp = (boardTemp*1.8)+32;
+
+
+bno.getEvent(&event, Adafruit_BNO055::VECTOR_GYROSCOPE);
+
+spin = (event.gyro.z);
+
+if (spin>spinLimit || spin<-spinLimit){
+  autoEnable=0;
+  autoEnableToggle=0;
+}
+
+if ((autoEnableToggle==0)&&(spin<spinLimit || spin>-spinLimit)){
+  toggleOffTime=currentTime;
+  autoEnableToggle=1;
+}
+
+autoEnableDelay = currentTime-toggleOffTime;
+
+if (autoEnableDelay>enableDelayTime && autoEnableToggle==1){
+  autoEnable=1;
+}
+//******* end 5/3/21 *****
+
 
 //Quaternion method
 /*
@@ -542,7 +577,6 @@ resetTime=currentTime-resetStartTime;
 */
 if(resetState==1){
   if(resetTime > 10000 && resetTime < 200000){
-    //maestro.setTarget(0,6000); //Stop Pan Motor
     pwm.writeMicroseconds(0, 1500);
     initializeSensor();  
     resetNum=++resetNum;
@@ -581,7 +615,7 @@ myPID.Compute();
 int Period=map(Output,-1023,1023,2000,1000);
 
 //Pan Motor Driving
-if (motorDrive==1){                              // Auto
+if (motorDrive==1 && autoEnable==1){                              // Auto
   if (uhe<-.4 || uhe>.4)                            // change numbers to adjust deadband
   {
   //maestro.setTarget(0,Period);
@@ -596,7 +630,7 @@ if (motorDrive==1){                              // Auto
   }
 }
 
-if (motorDrive==0){                           // Manual
+if (motorDrive==0 || autoEnable==0){                           // Manual
 periodM=1500+diffX;
 //maestro.setTarget(0,periodM);
 pwm.writeMicroseconds(0, periodM);
@@ -610,6 +644,8 @@ float microSecZ=((tiltCenter-(servoAnglez*degPerUs)));
 //maestro.setTarget(1,microSecZ);
 
 pwm.writeMicroseconds(1, microSecZ);
+
+
 
 //debug
 
@@ -643,6 +679,10 @@ pwm.writeMicroseconds(1, microSecZ);
   Serial.print(F("Packet Loss:"));
   Serial.print(packetLoss);
   Serial.println("%");
+  Serial.print(F("Temperature: "));
+  Serial.println(boardTemp);
+  //Serial.println(loopTime);
+  //Serial.println(autoEnable);
   Serial.println();
 
 

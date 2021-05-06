@@ -36,7 +36,7 @@ EasyButton tiltbutton(BUTTON_PINB);
 
 
 //Constants and Variables
-int payload[11];
+int payload[13];
 long previousMillis = 0;
 long interval = 100;
 int data=0;
@@ -80,6 +80,10 @@ int channel;
 int packetCount=1;
 int packetLossX100;
 float packetLoss;
+int autoEnable;
+int lastAutoEnable;
+bool returnToAuto=0;
+int boardTemp;
 
 // Callback function to be called when the button is pressed.
 void tiltLong() {
@@ -155,6 +159,8 @@ mag = payload[7];
 isCalibrated = payload[8];
 resetNum = payload[9];
 packetLossX100 = payload[10];
+autoEnable = payload[11]; 
+boardTemp = payload[12];
 
                                    
 memset(payload, 0, sizeof(payload));            // Delete contents of payload array to ensure fresh data
@@ -376,6 +382,31 @@ battLevel = constrain(battLevel, 0, 100);
 int meterLevel = battLevel/4;
 
 
+//set desired heading to current heading whenever auto enable comes back
+
+if (drive==1 && autoEnable==0){
+  drive=0;
+  returnToAuto=1;
+}
+
+if (drive==0 && returnToAuto==1 && autoEnable==1){
+  desiredHeading = ch;
+  drive=1;
+  returnToAuto=0;
+}
+/*
+if (autoEnable != lastAutoEnable){
+  if (autoEnable == 1){
+    desiredHeading = ch;
+    drive=1;
+  } else{
+    drive=0;
+  }
+}
+
+lastAutoEnable = autoEnable;
+*/
+
 //display section
 
   display.clearDisplay();
@@ -400,6 +431,7 @@ if (data == 0 && isCalibrated == 1){
 
 // Motor Drive On or Off
 
+if (autoEnable==1){
   display.setTextSize(1);
   display.setCursor(110,24);
   if(drive==0){
@@ -408,6 +440,21 @@ if (data == 0 && isCalibrated == 1){
   else if(drive==1){
     display.print(F("AUT"));
   }
+}
+
+if (autoEnable==0){
+  display.setTextSize(1);
+  display.setTextColor(BLACK, WHITE);
+  display.setCursor(110,24);
+  if(drive==0){
+    display.print(F("MAN"));
+  }
+  else if(drive==1){
+    display.print(F("AUT"));
+  }
+  display.setTextColor(WHITE);
+}
+
   
 
 // Tilt adjustment sensitivity
@@ -454,6 +501,12 @@ else if (data == 1 && isCalibrated == 1){
   display.print(F("PAN :"));
   display.setCursor(32,16);
   display.print(ch,1);
+
+  display.setCursor(83,16);
+  display.print(F("V : "));
+  display.setCursor(103,16);
+  display.print(battVoltageFlt*2);
+  
   display.setCursor(0,26);
   display.print(F("ROLL:"));
   display.setCursor(32,26);
@@ -463,9 +516,9 @@ else if (data == 1 && isCalibrated == 1){
   display.setCursor(32,36);
   display.print(tilt,1);
   display.setCursor(0,46);
-  display.print(F("BATT VOLTS: "));
-  display.setCursor(67,46);
-  display.print(battVoltageFlt*2);
+  display.print(F("TEMP: "));
+  display.setCursor(32,46);
+  display.print(boardTemp);
   display.setCursor(0,56);
   display.print(F("PACKET LOSS%:"));
   display.setCursor(80,56);
@@ -611,7 +664,8 @@ else if (isCalibrated == 0){
   String serialNum = (char*)addrA;  //convert byte array to printable string
   Serial.println(serialNum);
   Serial.print(F("Radio Channel: "));
-  Serial.println(channel);  
+  Serial.println(channel); 
+  //Serial.println(autoEnable); 
   Serial.println();
 
 
